@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "TJC Service Flow Automator",
+  "version": "1.0.0",
+  "description": "Automates service preparation on service.tjc.org and lower thirds on H2R Graphics from Google Sheets.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "*://service.tjc.org/*",
+    "*://docs.google.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://service.tjc.org/*",
+        "*://*.service.tjc.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["styles.css"],
+      "matches": [
+        "*://service.tjc.org/*",
+        "*://*.service.tjc.org/*"
+      ]
+    }
+  ],
+  "action": {}
+}

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mock Service Slide Builder - service.tjc.org (Local Test Harness)</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #131c2e;
+      --text: #f1f5f9;
+      --text-muted: #64748b;
+      --primary: #3b82f6;
+      --primary-glow: rgba(59, 130, 246, 0.4);
+      --border: rgba(255, 255, 255, 0.08);
+      --gradient: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Main Content */
+    .app-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 30px;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 28px;
+      background: linear-gradient(to right, #3b82f6, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    header p {
+      color: var(--text-muted);
+      margin: 5px 0 0 0;
+      font-size: 14px;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 30px;
+    }
+
+    /* Slides Editor Form */
+    .editor-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .editor-section h2 {
+      margin-top: 0;
+      font-size: 18px;
+      color: #3b82f6;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-group.full-width {
+      grid-column: span 2;
+    }
+
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    input[type="text"] {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: #ffffff;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+
+    /* Slides Preview Screen */
+    .preview-section {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .slide-canvas {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: var(--gradient);
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+      box-sizing: border-box;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slide-canvas::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .slide-title-zh {
+      font-size: 36px;
+      font-weight: 700;
+      margin: 0;
+      text-align: center;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    .slide-title-en {
+      font-size: 24px;
+      color: #93c5fd;
+      margin: 15px 0 0 0;
+      text-align: center;
+      font-weight: 500;
+      text-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    }
+
+    .slide-hymns {
+      position: absolute;
+      bottom: 30px;
+      font-size: 16px;
+      color: var(--text-muted);
+      background: rgba(0, 0, 0, 0.4);
+      padding: 8px 18px;
+      border-radius: 20px;
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+    }
+
+    /* Small indicators representing filled values */
+    .flow-timeline {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .flow-timeline h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .timeline-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #090d16;
+      border-radius: 8px;
+      font-size: 13px;
+      border-left: 3px solid #10b981;
+    }
+
+    .timeline-item.sermon {
+      border-left-color: #3b82f6;
+    }
+
+    /* Dynamic Hymns Badges styling */
+    .hymn-badge {
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #93c5fd;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: fadeIn 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      backdrop-filter: blur(4px);
+    }
+    .hymn-badge.praise {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #a7f3d0;
+    }
+    .hymn-badge .remove-btn {
+      cursor: pointer;
+      font-weight: bold;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    .hymn-badge .remove-btn:hover {
+      opacity: 1;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <header>
+      <h1>Mock Slide Builder</h1>
+      <p>Local simulation of <strong>service.tjc.org</strong> slide builder workspace (Extension content script matches localhost)</p>
+    </header>
+
+    <div class="main-grid">
+      <!-- Editor Form -->
+      <div class="editor-section">
+        <h2>Slide Input Panel</h2>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label for="mock-title-zh">Sermon Title (Chinese) - 講題 (中)</label>
+            <input type="text" id="mock-title-zh" placeholder="Enter Chinese title..." />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="mock-title-en">Sermon Title (English) - 講題 (英)</label>
+            <input type="text" id="mock-title-en" placeholder="Enter English title..." />
+          </div>
+
+          <div class="form-group full-width" style="border-top: 1px solid var(--border); padding-top: 15px; margin-top: 5px;">
+            <label for="mock-praise-hymns-input">Praise Hymns Input Field (Type & Enter)</label>
+            <input type="text" id="mock-praise-hymns-input" placeholder="Type hymn number and press Enter... (e.g. 10)" />
+            <div id="mock-praise-hymns-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+          </div>
+
+          <div class="form-group full-width" style="border-top: 1px solid var(--border); padding-top: 15px;">
+            <label for="mock-sermon-hymns-input">Sermon Hymns Input Field (Type & Enter)</label>
+            <input type="text" id="mock-sermon-hymns-input" placeholder="Type hymn number and press Enter... (e.g. 154)" />
+            <div id="mock-sermon-hymns-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Slide View -->
+      <div class="preview-section">
+        <div class="slide-canvas">
+          <h2 class="slide-title-zh" id="slide-zh">講題 (Chinese Title)</h2>
+          <h3 class="slide-title-en" id="slide-en">English Sermon Title</h3>
+          <div class="slide-hymns" id="slide-hymn-info">Sermon Hymn: -</div>
+        </div>
+
+        <div class="flow-timeline">
+          <h3>Service Flow Order</h3>
+          <div class="timeline-item">
+            <span>Pre-Service Praise Sing</span>
+            <strong id="timeline-pre-hymns">-</strong>
+          </div>
+          <div class="timeline-item sermon">
+            <span>Sermon Speaker Session</span>
+            <strong id="timeline-sermon-hymn">-</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Live update UI elements based on inputs to simulate the React/Vue dynamic state updates
+    const titleZhInput = document.getElementById('mock-title-zh');
+    const titleEnInput = document.getElementById('mock-title-en');
+    const praiseInput = document.getElementById('mock-praise-hymns-input');
+    const praiseListContainer = document.getElementById('mock-praise-hymns-list');
+    const sermonInput = document.getElementById('mock-sermon-hymns-input');
+    const sermonListContainer = document.getElementById('mock-sermon-hymns-list');
+
+    const slideZh = document.getElementById('slide-zh');
+    const slideEn = document.getElementById('slide-en');
+    const slideHymns = document.getElementById('slide-hymn-info');
+    const timelinePre = document.getElementById('timeline-pre-hymns');
+    const timelineSermon = document.getElementById('timeline-sermon-hymn');
+
+    let praiseHymnsList = [];
+    let sermonHymnsList = [];
+
+    function updatePreview() {
+      slideZh.textContent = titleZhInput.value || "講題 (Chinese Title)";
+      slideEn.textContent = titleEnInput.value || "English Sermon Title";
+      
+      const preHymns = praiseHymnsList;
+      timelinePre.textContent = preHymns.length > 0 ? `Hymns: ${preHymns.join(', ')}` : "Hymns: -";
+
+      const sHymns = sermonHymnsList;
+      slideHymns.textContent = `Sermon Hymns: ${sHymns.join(', ') || '-'}`;
+      timelineSermon.textContent = `Hymns: ${sHymns.join(', ') || '-'}`;
+    }
+
+    function renderPraiseHymns() {
+      praiseListContainer.innerHTML = '';
+      praiseHymnsList.forEach((hymn, idx) => {
+        const badge = document.createElement('div');
+        badge.className = 'hymn-badge praise';
+        badge.innerHTML = `<span>Hymn ${hymn}</span><span class="remove-btn" onclick="removePraiseHymn(${idx})">✕</span>`;
+        praiseListContainer.appendChild(badge);
+      });
+      updatePreview();
+    }
+
+    window.removePraiseHymn = function(idx) {
+      praiseHymnsList.splice(idx, 1);
+      renderPraiseHymns();
+    };
+
+    function renderSermonHymns() {
+      sermonListContainer.innerHTML = '';
+      sermonHymnsList.forEach((hymn, idx) => {
+        const badge = document.createElement('div');
+        badge.className = 'hymn-badge';
+        badge.innerHTML = `<span>Hymn ${hymn}</span><span class="remove-btn" onclick="removeSermonHymn(${idx})">✕</span>`;
+        sermonListContainer.appendChild(badge);
+      });
+      updatePreview();
+    }
+
+    window.removeSermonHymn = function(idx) {
+      sermonHymnsList.splice(idx, 1);
+      renderSermonHymns();
+    };
+
+    praiseInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = praiseInput.value.trim();
+        if (val) {
+          praiseHymnsList.push(val);
+          praiseInput.value = '';
+          renderPraiseHymns();
+        }
+      }
+    });
+
+    sermonInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = sermonInput.value.trim();
+        if (val) {
+          sermonHymnsList.push(val);
+          sermonInput.value = '';
+          renderSermonHymns();
+        }
+      }
+    });
+
+    // Also support 'input' listener in case of programmatic autofills that don't trigger Enter keydown properly
+    // but we support Enter key down fully!
+    [titleZhInput, titleEnInput].forEach(input => {
+      input.addEventListener('input', updatePreview);
+      input.addEventListener('change', updatePreview);
+    });
+  </script>
+</body>
+</html>

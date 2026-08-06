@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "H2R Graphics Controller",
+  "version": "1.0.0",
+  "description": "Syncs church schedules from Google Sheets and pushes bilingual lower third overlays to H2R Graphics.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://docs.google.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

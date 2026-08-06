@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>H2R Graphics Controller</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-wrapper">
+        <div class="logo-icon">📡</div>
+        <div class="logo-text">
+          <h1>H2R Graphics</h1>
+          <p>Global Rundown Controller</p>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="control">Control Panel</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+    </div>
+
+    <!-- Active Content Area -->
+    <main class="main-content">
+      <!-- CONTROL PANEL TAB -->
+      <div class="tab-panel active" id="panel-control">
+        <!-- Google Sheet Controller -->
+        <div class="card">
+          <div class="card-header">
+            <h3>📅 Church Schedule Date</h3>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="btn-icon" id="btn-reset-sync" title="Reset to Auto-Sync Today" style="display: none; font-size: 13px;">📅</button>
+              <button class="btn-icon" id="btn-reload-sheet" title="Reload Google Sheet">↻</button>
+            </div>
+          </div>
+          
+          <div class="form-group" id="sheet-select-group" style="display:none; margin-top: 10px;">
+            <label for="service-selector">Select Service Date</label>
+            <div class="select-wrapper">
+              <select id="service-selector">
+                <option value="" disabled selected>Loading schedule...</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div class="status-box empty" id="sheet-empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <p>No schedule dates loaded.</p>
+            <button class="btn" id="btn-empty-load-sheet">Load Google Sheet</button>
+          </div>
+
+          <!-- Loading State -->
+          <div class="status-box loading" id="sheet-loading-state" style="display:none;">
+            <div class="spinner"></div>
+            <p id="loading-text">Fetching schedules...</p>
+          </div>
+          
+          <!-- Date Info Metadata -->
+          <div class="date-meta" id="date-meta-info" style="display:none;">
+            <span class="meta-tag" id="meta-speaker">Speaker: -</span>
+            <span class="meta-tag" id="meta-date">Date: -</span>
+          </div>
+        </div>
+
+        <!-- H2R Live Lower Third Preview Card -->
+        <div class="card preview-card" style="margin-top: 16px;">
+          <div class="card-header">
+            <h3>📺 Live Lower Third Broadcast Preview</h3>
+            <span class="live-badge">Live Preview</span>
+          </div>
+          <div class="preview-display">
+            <div class="preview-inner">
+              <div class="preview-title" id="h2r-preview-t">Sermon Title | 講題</div>
+              <div class="preview-subtitle" id="h2r-preview-s">Speaker & Hymns</div>
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding: 0 4px;">
+            <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="h2r-auto-show" style="width:16px; height:16px; margin:0;" />
+              <label for="h2r-auto-show" style="font-size:12px; color:var(--text-primary); cursor:pointer;">Auto-Take Live (Show) on Push</label>
+            </div>
+          </div>
+          
+          <button class="btn btn-primary" id="btn-push-h2r" style="margin-top: 14px; width: 100%;">
+            <span>🚀 Push to H2R Graphics</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- SETTINGS TAB -->
+      <div class="tab-panel" id="panel-settings">
+        <!-- Connection Settings -->
+        <div class="card">
+          <h3>🔗 Google Sheet Settings</h3>
+          <div class="form-group" style="margin-top:10px;">
+            <label for="settings-sheet-url">Google Sheet HTMLView URL</label>
+            <input type="text" id="settings-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/.../htmlview" />
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3>🔌 H2R Graphics Connection</h3>
+          
+          <div class="form-group" style="margin-top: 10px;">
+            <label for="settings-h2r-pasted-url">Paste H2R "Update" URL (Recommended)</label>
+            <input type="text" id="settings-h2r-pasted-url" placeholder="Right-click lower-third graphic -> Copy 'Update' URL..." />
+            <p class="tip-text">💡 Paste the H2R update URL to automatically discover all host, project, and graphic parameters securely!</p>
+          </div>
+
+          <hr class="divider">
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label for="settings-h2r-host">Host IP Address</label>
+              <input type="text" id="settings-h2r-host" placeholder="http://localhost:4001" />
+            </div>
+            <div class="form-group">
+              <label for="settings-h2r-project">Project ID</label>
+              <input type="text" id="settings-h2r-project" placeholder="default" />
+            </div>
+          </div>
+          
+          <div class="form-group" style="margin-top: 10px;">
+            <label for="settings-h2r-graphic-id">H2R Graphic ID</label>
+            <input type="text" id="settings-h2r-graphic-id" placeholder="e.g. lower-third-xxxx" />
+          </div>
+        </div>
+
+        <!-- Custom Template Settings -->
+        <div class="card" style="margin-top: 16px;">
+          <h3>📝 H2R JSON Payload Template</h3>
+          <div class="form-group" style="margin-top: 10px;">
+            <textarea id="settings-h2r-template" style="font-family:monospace; font-size:11px; min-height:120px;"></textarea>
+          </div>
+          <p class="tip-text">Supported keys: <code>{title_zh}</code>, <code>{title_en}</code>, <code>{speaker_zh}</code>, <code>{speaker_en}</code>, <code>{sermon_hymns}</code>.</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Toast Notification container -->
+    <div class="toast-box" id="popup-toast-box"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
