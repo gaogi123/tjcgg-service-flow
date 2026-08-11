@@ -12,7 +12,8 @@
     window.location.search.toLowerCase().includes('display');
 
   if (isPresenter) {
-    console.log("TJC Service Flow Automator: Presenter/projector view detected. Early return to keep projector screen clean.");
+    console.log("TJC Service Flow Automator: Presenter/projector view detected. Setting up Verse Observer and returning to keep UI clean.");
+    setupVerseObserver();
     return;
   }
 
@@ -45,7 +46,11 @@
 
   // Default App Settings
   let settings = {
-    sheetUrl: "https://docs.google.com/spreadsheets/d/1zrMaPubQ7uaUvgBjYZ3lWIBRUclg0GsGliHMqpvOark/edit?gid=1244479830#gid=1244479830"
+    sheetUrl: "https://docs.google.com/spreadsheets/d/1zrMaPubQ7uaUvgBjYZ3lWIBRUclg0GsGliHMqpvOark/edit?gid=1244479830#gid=1244479830",
+    h2rVerseIp: "http://10.10.1.67:4001",
+    h2rVerseProject: "ABCD",
+    h2rVerseGraphicId: "",
+    h2rVerseTemplate: '{\n  "body": "{reference}\\n{chinese}\\n{english}"\n}'
   };
 
   // Selectors Map (saved to chrome.storage.local)
@@ -313,6 +318,32 @@
           </div>
           <div style="font-size:11px; background: rgba(0,0,0,0.2); padding: 10px 12px; border-radius: 8px; border:1px solid var(--border-color); font-family: monospace; line-height: 1.5; max-height: 140px; overflow-y: auto;" id="tjc-debug-selectors-info">
             Loading storage debugger...
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border-color); margin:20px 0 8px 0; padding-top:16px; display:flex; flex-direction:column; gap:12px;">
+          <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.05em;">H2R Verse Sync (Pop-up Monitor)</div>
+          
+          <div class="form-group">
+            <label>H2R IP Address & Port</label>
+            <input type="text" id="tjc-verse-ip-input" value="${settings.h2rVerseIp}" placeholder="http://10.10.1.67:4001" />
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+            <div class="form-group">
+              <label>H2R Project</label>
+              <input type="text" id="tjc-verse-project-input" value="${settings.h2rVerseProject}" placeholder="ABCD" />
+            </div>
+            <div class="form-group">
+              <label>H2R Graphic ID</label>
+              <input type="text" id="tjc-verse-graphic-input" value="${settings.h2rVerseGraphicId}" placeholder="e.g. 5MMWQ" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Payload Template (JSON)</label>
+            <textarea id="tjc-verse-template-input" rows="5" style="width:100%; padding:8px; font-family:monospace; font-size:11px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-secondary); color:var(--text-primary); resize:vertical;">${settings.h2rVerseTemplate}</textarea>
+            <p style="font-size:10px; color:var(--text-muted); margin:4px 0 0 0;">Available variables: <code>{reference}</code>, <code>{chinese}</code>, <code>{english}</code></p>
           </div>
         </div>
       </div>
@@ -1443,6 +1474,28 @@
 
 
 
+  // ---------------------------------------------------------
+  // Verse Sync Settings Realtime Saving
+  // ---------------------------------------------------------
+  const verseInputs = [
+    { el: shadowRoot.querySelector('#tjc-verse-ip-input'), key: 'h2rVerseIp' },
+    { el: shadowRoot.querySelector('#tjc-verse-project-input'), key: 'h2rVerseProject' },
+    { el: shadowRoot.querySelector('#tjc-verse-graphic-input'), key: 'h2rVerseGraphicId' },
+    { el: shadowRoot.querySelector('#tjc-verse-template-input'), key: 'h2rVerseTemplate' }
+  ];
+
+  verseInputs.forEach(item => {
+    if (item.el) {
+      item.el.addEventListener('input', async () => {
+        settings[item.key] = item.el.value;
+        await chrome.storage.local.set({ settings });
+      });
+    }
+  });
+
+  // Start the verse observer in the control window too, in case verses are displayed there
+  setupVerseObserver();
+
   // Initial load
   updateMappingBadges();
 
@@ -1450,5 +1503,144 @@
   setTimeout(() => {
     sidebar.classList.remove('collapsed');
   }, 600);
+
+  // ---------------------------------------------------------
+  // Verse Sync Observer Logic
+  // ---------------------------------------------------------
+  function setupVerseObserver() {
+    let lastVerseText = "";
+
+    const observer = new MutationObserver(() => {
+      const text = document.body.innerText.trim();
+      if (text === lastVerseText || !text) return;
+
+      console.log("TJC Automator: RAW OBSERVER TEXT START ==\\n", text, "\\n== RAW OBSERVER TEXT END");
+
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      console.log("TJC Automator: Number of lines found:", lines.length);
+
+      // We look for a line containing a Bible reference (e.g., 1:1)
+      const refIndex = lines.findIndex(l => /[0-9]+:[0-9]+/.test(l));
+      console.log("TJC Automator: Reference index found at:", refIndex);
+
+      if (refIndex !== -1 && lines.length >= refIndex + 3) {
+        const currentVerse = lines.slice(refIndex, refIndex + 3).join('\n');
+
+        if (currentVerse !== lastVerseText) {
+          lastVerseText = currentVerse;
+          let reference = lines[refIndex];
+          let english = lines[refIndex + 1];
+          let chinese = lines[refIndex + 2];
+
+          // Chunking helper to insert line breaks
+          const chunkText = (text, maxLength, isEnglish) => {
+            if (!text) return "";
+            let result = [];
+            let current = text.trim();
+            while (current.length > maxLength) {
+              let splitIndex = maxLength;
+              if (isEnglish) {
+                // Find last space before the max length to avoid cutting words
+                const lastSpace = current.lastIndexOf(' ', maxLength);
+                if (lastSpace > 0) splitIndex = lastSpace;
+              }
+              result.push(current.slice(0, splitIndex).trim());
+              current = current.slice(splitIndex).trim();
+            }
+            if (current.length > 0) result.push(current);
+            // We use literal \n so the replacePlaceholders correctly replaces it
+            return result.join('\\n');
+          };
+
+          chinese = chunkText(chinese, 36, false);
+          english = chunkText(english, 80, true);
+
+          console.log("TJC Automator: Detected Verse!", { reference, chinese, english });
+          pushVerseToH2R(reference, chinese, english);
+        }
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    console.log("TJC Automator: Verse Observer is running.");
+  }
+
+  async function pushVerseToH2R(ref, zh, en) {
+    let currentSettings = {
+      h2rVerseIp: "http://10.10.1.67:4001",
+      h2rVerseProject: "ABCD",
+      h2rVerseGraphicId: "",
+      h2rVerseTemplate: '{\n  "body": "{reference}\\n{chinese}\\n{english}"\n}'
+    };
+
+    try {
+      const storedData = await chrome.storage.local.get('settings');
+      if (storedData.settings) {
+        currentSettings = { ...currentSettings, ...storedData.settings };
+      }
+    } catch (err) {
+      console.warn("TJC Automator: Could not load settings from storage", err);
+    }
+
+    if (!currentSettings.h2rVerseGraphicId) {
+      console.log("TJC Automator: Skipping H2R push because Verse Graphic ID is not configured.");
+      return;
+    }
+
+    const ip = currentSettings.h2rVerseIp || "http://10.10.1.67:4001";
+    const proj = currentSettings.h2rVerseProject || "ABCD";
+    const gid = currentSettings.h2rVerseGraphicId;
+
+    let templateObj;
+    try {
+      templateObj = JSON.parse(currentSettings.h2rVerseTemplate || '{"body":"{reference}\\n{chinese}\\n{english}"}');
+    } catch (e) {
+      console.error("TJC Automator: Invalid Verse Template JSON");
+      return;
+    }
+
+    function replacePlaceholders(obj) {
+      if (typeof obj === 'string') {
+        return obj
+          .replace(/{reference}/g, ref)
+          .replace(/{chinese}/g, zh)
+          .replace(/{english}/g, en);
+      } else if (Array.isArray(obj)) {
+        return obj.map(replacePlaceholders);
+      } else if (obj !== null && typeof obj === 'object') {
+        const res = {};
+        for (const k in obj) {
+          res[k] = replacePlaceholders(obj[k]);
+        }
+        return res;
+      }
+      return obj;
+    }
+
+    const payload = replacePlaceholders(templateObj);
+    if (!Array.isArray(payload.cues)) payload.cues = [];
+
+    const updateUrl = `${ip.replace(/\/$/, '')}/api/${proj}/graphic/${gid}/update`;
+    const showUrl = `${ip.replace(/\/$/, '')}/api/${proj}/graphic/${gid}/show`;
+
+    try {
+      chrome.runtime.sendMessage({
+        action: 'PUSH_H2R',
+        updateUrl: updateUrl,
+        showUrl: showUrl,
+        payload: payload
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error("TJC Automator: Error communicating with background script:", chrome.runtime.lastError);
+        } else if (response && response.success) {
+          console.log("TJC Automator: Pushed verse to H2R successfully via background script!", ref);
+        } else {
+          console.error("TJC Automator: Background script failed to push verse to H2R", response?.error);
+        }
+      });
+    } catch (e) {
+      console.error("TJC Automator: Failed to push verse to H2R Graphics", e);
+    }
+  }
 
 })();

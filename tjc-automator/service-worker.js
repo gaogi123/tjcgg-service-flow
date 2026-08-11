@@ -47,4 +47,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true; // Keep channel open
   }
+
+  if (message.action === 'PUSH_H2R') {
+    (async () => {
+      try {
+        console.log("TJC Automator SW: Pushing to H2R...", message.updateUrl);
+        const updateRes = await fetch(message.updateUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(message.payload)
+        });
+        
+        if (updateRes.ok && message.showUrl) {
+          await fetch(message.showUrl, { method: 'POST' });
+        }
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('Error in PUSH_H2R:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open
+  }
 });

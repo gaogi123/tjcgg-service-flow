@@ -1,0 +1,4 @@
+I use https://service.tjc.org to display Bible verses on Windows computer with an IP address of 10.10.1.48.  The way service.tjc.org works is that there is a control window where verses are selected, and a pop up window will display the actual Bible verse in Chinese and English.
+
+I am using a Mac Mini on IP address 10.10.1.67 to livestream.  I use H2R Graphics to generate lower thirds graphic.  I would like H2R Graphics to automatically generate the verse that is selected on the Windows PC.  
+Ideally, there is a program running on the Windows PC that is monitoring the pop up window with the verse display, parse the verses only, ignoring the sermon title, and pass the content over to H2R Graphics on the Mac to generate lower third graphics.
