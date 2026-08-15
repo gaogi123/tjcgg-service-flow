@@ -2,17 +2,18 @@
 
 (async () => {
   // 1. Early Return: Disable extension UI on presenter/projector/display screens
-  const isPresenter = window.location.href.toLowerCase().includes('/present') || 
-                      window.location.href.toLowerCase().includes('/projector') || 
-                      window.location.href.toLowerCase().includes('/display') || 
-                      window.location.href.toLowerCase().includes('/view') || 
-                      window.location.href.toLowerCase().includes('/screen') ||
-                      window.location.search.toLowerCase().includes('present') ||
-                      window.location.search.toLowerCase().includes('projector') ||
-                      window.location.search.toLowerCase().includes('display');
+  const isPresenter = window.location.href.toLowerCase().includes('/present') ||
+    window.location.href.toLowerCase().includes('/projector') ||
+    window.location.href.toLowerCase().includes('/display') ||
+    window.location.href.toLowerCase().includes('/view') ||
+    window.location.href.toLowerCase().includes('/screen') ||
+    window.location.search.toLowerCase().includes('present') ||
+    window.location.search.toLowerCase().includes('projector') ||
+    window.location.search.toLowerCase().includes('display');
 
   if (isPresenter) {
-    console.log("TJC Service Flow Automator: Presenter/projector view detected. Early return to keep projector screen clean.");
+    console.log("TJC Service Flow Automator: Presenter/projector view detected. Setting up Verse Observer and returning to keep UI clean.");
+    setupVerseObserver();
     return;
   }
 
@@ -37,23 +38,26 @@
 
   const shadowRoot = container.attachShadow({ mode: 'open' });
 
-  // Load stylesheet from web accessible resource
-  const styleLink = document.createElement('link');
-  styleLink.rel = 'stylesheet';
-  styleLink.href = chrome.runtime.getURL('styles.css');
-  shadowRoot.appendChild(styleLink);
+  // Load stylesheet inline to prevent Fullstory CORS SecurityError on cssRules access
+  fetch(chrome.runtime.getURL('styles.css'))
+    .then(response => response.text())
+    .then(css => {
+      const styleTag = document.createElement('style');
+      styleTag.textContent = css;
+      shadowRoot.appendChild(styleTag);
+    })
+    .catch(err => console.error("TJC Service Flow Automator: Failed to load styles.css", err));
 
   // Default App Settings
   let settings = {
     sheetUrl: "https://docs.google.com/spreadsheets/d/1zrMaPubQ7uaUvgBjYZ3lWIBRUclg0GsGliHMqpvOark/edit?gid=1244479830#gid=1244479830",
-    h2rHost: "http://localhost:4001",
-    h2rProject: "default",
-    h2rGraphicId: "5MMWQ",
-    h2rEndpoint: "",
-    h2rAutoShow: true,
+    h2rVerseIp: "http://10.10.1.67:4001",
+    h2rVerseProject: "ABCD",
+    h2rVerseGraphicId: "",
+    h2rVerseTemplate: '{\n  "body": "{reference}\\n{chinese}\\n{english}"\n}',
     h2rTemplate: JSON.stringify({
-      line_one: "{title_zh} | {title_en}",
-      line_two: "講員/Speaker: {speaker_zh} {speaker_en} ｜ 詩歌/Hymns: {sermon_hymns}"
+      "line_one": "{title_zh} | {title_en}",
+      "line_two": "講員/Speaker: {speaker} ｜ 詩歌/Hymns: {sermon_hymns}"
     }, null, 2)
   };
 
@@ -81,7 +85,7 @@
     speaker_en: ""
   };
 
-  let activeTab = "data"; // "data", "h2r", "settings"
+  let activeTab = "data"; // "data", "settings"
   let activeMappingFieldId = null; // field ID currently in "Target Mapping" mode
 
   // Load stored configurations
@@ -91,11 +95,11 @@
     settings = { ...settings, ...storedData.settings };
     console.log("TJC Service Flow: Loaded settings:", settings);
   }
-  
+
   // Clean and parse elementSelectors safely on startup
   const loadedSelectors = storedData.elementSelectors || {};
   let migrated = false;
-  
+
   // Empathetic migration: Migrate legacy keys if they exist and new keys don't
   if (loadedSelectors.pre_hymn_1 && !loadedSelectors.praise_hymns) {
     loadedSelectors.praise_hymns = loadedSelectors.pre_hymn_1;
@@ -105,7 +109,7 @@
     loadedSelectors.sermon_hymns = loadedSelectors.sermon_hymn_start;
     migrated = true;
   }
-  
+
   // Always clean and align keys to default keys
   const defaultKeys = ['title_zh', 'title_en', 'praise_hymns', 'sermon_hymns'];
   defaultKeys.forEach(key => {
@@ -115,42 +119,19 @@
       elementSelectors[key] = "";
     }
   });
-  
+
   // If we migrated or if storage has extra/missing keys, sync back to storage immediately to stay clean
-  const hasExtraOrMissingKeys = Object.keys(loadedSelectors).some(k => !defaultKeys.includes(k)) || 
-                                defaultKeys.some(k => loadedSelectors[k] === undefined);
-                                
+  const hasExtraOrMissingKeys = Object.keys(loadedSelectors).some(k => !defaultKeys.includes(k)) ||
+    defaultKeys.some(k => loadedSelectors[k] === undefined);
+
   if (migrated || hasExtraOrMissingKeys) {
     console.log("TJC Service Flow: Cleaning and saving aligned selectors in storage...");
     await chrome.storage.local.set({ elementSelectors });
   }
-  
+
   console.log("TJC Service Flow: Loaded elementSelectors:", elementSelectors);
 
-  // Self-healing settings migration for H2R Graphics V2 payload keys or old labels
-  let needsSave = false;
-  if (settings.h2rTemplate && (settings.h2rTemplate.includes('"title"') || settings.h2rTemplate.includes('"description"'))) {
-    console.log("Migrating legacy H2R template to line_one/line_two structure...");
-    settings.h2rTemplate = JSON.stringify({
-      line_one: "{title_zh} | {title_en}",
-      line_two: "講員/Speaker: {speaker_zh} {speaker_en} ｜ 詩歌/Hymns: {sermon_hymns}"
-    }, null, 2);
-    needsSave = true;
-  } else if (settings.h2rTemplate && settings.h2rTemplate.includes("({speaker_en})")) {
-    console.log("Migrating speaker english name parentheses off H2R template...");
-    settings.h2rTemplate = settings.h2rTemplate.replace(/\({speaker_en}\)/g, "{speaker_en}");
-    needsSave = true;
-  } else if (settings.h2rTemplate && settings.h2rTemplate.includes("講員:") && !settings.h2rTemplate.includes("講員/Speaker")) {
-    console.log("Migrating H2R template to bilingual labels...");
-    settings.h2rTemplate = settings.h2rTemplate
-      .replace(/講員:/g, "講員/Speaker:")
-      .replace(/詩歌:/g, "詩歌/Hymns:");
-    needsSave = true;
-  }
-  
-  if (needsSave) {
-    await chrome.storage.local.set({ settings });
-  }
+
 
   // Create UI Structure inside Shadow DOM
   const widget = document.createElement('div');
@@ -189,7 +170,7 @@
         <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4" />
         </svg>
-        H2R Graphics
+        H2R Sermon
       </button>
       <button class="tab-btn" data-tab="settings">
         <svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -266,7 +247,7 @@
           </div>
 
           <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px;">
-            <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-secondary); margin-bottom:4px; letter-spacing:0.05em;">Praise Praise Songs List</div>
+            <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-primary); margin-bottom:4px; letter-spacing:0.05em;">Praise Hymn List</div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
               <div class="form-group">
                 <label style="font-size:10px;">Hymn 1</label>
@@ -319,7 +300,7 @@
             <svg style="width:18px;height:18px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            Auto-Fill service.tjc.org
+            Auto-Fill & Push to H2R
           </button>
         </div>
 
@@ -393,16 +374,10 @@
         </button>
       </div>
 
+      
+
       <!-- SETTINGS PANEL -->
       <div class="tab-panel" id="panel-settings">
-        <div class="form-group">
-          <label>H2R JSON Payload Template</label>
-          <textarea id="h2r-payload-template" style="font-family:monospace; font-size:12px; min-height:140px;">${settings.h2rTemplate}</textarea>
-        </div>
-
-        <button class="btn" id="tjc-save-settings-btn" style="margin-top:12px">
-          Save Settings
-        </button>
         
         <button class="btn btn-secondary btn-danger" id="tjc-reset-selectors-btn" style="margin-top:4px">
           Reset CSS Mappings
@@ -415,6 +390,38 @@
           </div>
           <div style="font-size:11px; background: rgba(0,0,0,0.2); padding: 10px 12px; border-radius: 8px; border:1px solid var(--border-color); font-family: monospace; line-height: 1.5; max-height: 140px; overflow-y: auto;" id="tjc-debug-selectors-info">
             Loading storage debugger...
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border-color); margin:20px 0 8px 0; padding-top:16px; display:flex; flex-direction:column; gap:12px;">
+          <div class="form-group">
+            <label>H2R Sermon JSON Payload Template</label>
+            <textarea id="h2r-payload-template" style="font-family:monospace; font-size:12px; min-height:140px; width:100%; border:1px solid var(--border-color); border-radius:6px; padding:8px; background:var(--bg-secondary); color:var(--text-primary);">${settings.h2rTemplate}</textarea>
+            <p style="font-size:10px; color:var(--text-muted); margin:4px 0 0 0;">Supported keys: <code>{title_zh}</code>, <code>{title_en}</code>, <code>{speaker_zh}</code>, <code>{speaker_en}</code>, <code>{sermon_hymns}</code>.</p>
+          </div>
+
+          <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.05em; margin-top:24px;">H2R Verse Sync (Pop-up Monitor)</div>
+          
+          <div class="form-group">
+            <label>H2R IP Address & Port</label>
+            <input type="text" id="tjc-verse-ip-input" value="${settings.h2rVerseIp}" placeholder="http://10.10.1.67:4001" />
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+            <div class="form-group">
+              <label>H2R Project</label>
+              <input type="text" id="tjc-verse-project-input" value="${settings.h2rVerseProject}" placeholder="ABCD" />
+            </div>
+            <div class="form-group">
+              <label>H2R Graphic ID</label>
+              <input type="text" id="tjc-verse-graphic-input" value="${settings.h2rVerseGraphicId}" placeholder="e.g. 5MMWQ" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Payload Template (JSON)</label>
+            <textarea id="tjc-verse-template-input" rows="5" style="width:100%; padding:8px; font-family:monospace; font-size:11px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-secondary); color:var(--text-primary); resize:vertical;">${settings.h2rVerseTemplate}</textarea>
+            <p style="font-size:10px; color:var(--text-muted); margin:4px 0 0 0;">Available variables: <code>{reference}</code>, <code>{chinese}</code>, <code>{english}</code></p>
           </div>
         </div>
       </div>
@@ -459,7 +466,7 @@
   function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    
+
     let icon = '✓';
     if (type === 'error') icon = '✕';
     if (type === 'info') icon = 'ℹ';
@@ -483,15 +490,11 @@
     btn.addEventListener('click', () => {
       tabBtns.forEach(b => b.classList.remove('active'));
       tabPanels.forEach(p => p.classList.remove('active'));
-      
+
       btn.classList.add('active');
       const tabId = btn.getAttribute('data-tab');
       shadowRoot.querySelector(`#panel-${tabId}`).classList.add('active');
       activeTab = tabId;
-
-      if (tabId === 'h2r') {
-        updateH2RPreview();
-      }
     });
   });
 
@@ -500,11 +503,11 @@
     const lines = [];
     let row = [""];
     let insideQuote = false;
-    
+
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
-      const nextChar = text[i+1];
-      
+      const nextChar = text[i + 1];
+
       if (char === '"') {
         if (insideQuote && nextChar === '"') {
           row[row.length - 1] += '"';
@@ -524,7 +527,7 @@
         row[row.length - 1] += char;
       }
     }
-    
+
     if (row.length > 1 || row[0] !== "") {
       lines.push(row);
     }
@@ -535,7 +538,7 @@
   function splitChineseAndEnglish(text) {
     if (!text) return { zh: '', en: '' };
     text = text.trim();
-    
+
     // Case 1: Multiple lines
     if (text.includes('\n')) {
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -555,7 +558,7 @@
         return { zh: lines[0], en: lines[1] };
       }
     }
-    
+
     // Case 2: Split by common delimiters
     const delimiters = ['/', '｜', '|', ' - '];
     for (let delim of delimiters) {
@@ -574,11 +577,11 @@
         }
       }
     }
-    
+
     // Case 3: Mixed language without delimiters (e.g. "What is Your Hope? 什麼是你的盼望?")
     const hasChinese = /[\u4e00-\u9fa5]/.test(text);
     const hasEnglish = /[a-zA-Z]/.test(text);
-    
+
     if (hasChinese && hasEnglish) {
       // Try regex splits first (with improved boundaries including parentheses and punctuation)
       const parts = text.split(/(?<=[\w\?\!\.\)\uff09])\s+(?=[\u4e00-\u9fa5])|(?<=[\u4e00-\u9fa5\)\uff09])\s+(?=[a-zA-Z])/);
@@ -600,11 +603,11 @@
       for (let i = 1; i < words.length; i++) {
         const leftSide = words.slice(0, i).join(' ');
         const rightSide = words.slice(i).join(' ');
-        
+
         const leftHasZh = /[\u4e00-\u9fa5]/.test(leftSide);
         const rightHasZh = /[\u4e00-\u9fa5]/.test(rightSide);
         const rightHasEn = /[a-zA-Z]/.test(rightSide);
-        
+
         if (leftHasZh && !rightHasZh && rightHasEn) {
           return { zh: leftSide, en: rightSide };
         }
@@ -615,11 +618,11 @@
         // Strip English letters from Chinese part, but preserve spaces and punctuation
         return match.replace(/[a-zA-Z]+/g, '').replace(/\s+/g, ' ');
       }).trim();
-      
+
       const en = text.replace(/[\u4e00-\u9fa5]/g, '').trim().replace(/\s+/g, ' ');
       return { zh, en };
     }
-    
+
     if (hasChinese) return { zh: text, en: text };
     return { zh: text, en: text };
   }
@@ -783,25 +786,26 @@
 
       // Save URL config
       settings.sheetUrl = rawUrl;
-      await chrome.storage.local.set({ settings });
+      const currentStored = await chrome.storage.local.get("settings");
+      await chrome.storage.local.set({ settings: { ...(currentStored.settings || {}), ...settings } });
 
       // Show panels
       dataLoadingState.style.display = 'none';
       serviceSelectGroup.style.display = 'block';
       fieldsList.style.display = 'block';
-      
+
       // Explicitly refresh mapping badges UI state on sheet reloads
       updateMappingBadges();
-      
+
       // 4. AUTOMATIC DATE SELECTOR - Find record closest to today's date!
       const today = new Date();
       // Force midnight to only match calendar dates
       today.setHours(0, 0, 0, 0);
       const todayMs = today.getTime();
-      
+
       let closestIdx = 0;
       let minDiff = Infinity;
-      
+
       servicesData.forEach((s, idx) => {
         const serviceDate = parseDateString(s.date);
         serviceDate.setHours(0, 0, 0, 0);
@@ -814,7 +818,7 @@
 
       serviceSelector.value = closestIdx;
       onServiceSelected(closestIdx);
-      
+
       const closestService = servicesData[closestIdx];
       showToast(`Scraped ${servicesData.length} records. Auto-selected date: ${closestService.date}!`);
 
@@ -852,15 +856,12 @@
     Object.keys(inputDoms).forEach(key => {
       inputDoms[key].value = parsedFields[key];
     });
-
-    updateH2RPreview();
   }
 
   // Listen to input changes to update model state in real-time
   Object.keys(inputDoms).forEach(key => {
     inputDoms[key].addEventListener('input', (e) => {
       parsedFields[key] = e.target.value.trim();
-      updateH2RPreview();
     });
   });
 
@@ -869,6 +870,11 @@
   });
 
   loadSheetBtn.addEventListener('click', loadGoogleSheet);
+
+  // Auto-load on startup if URL exists
+  if (settings.sheetUrl) {
+    loadGoogleSheet();
+  }
 
   // Selector mapping badge state updater
   function updateMappingBadges() {
@@ -906,9 +912,9 @@
   function getUniqueSelector(el) {
     // Ignore dynamic Material-UI generated IDs like mui-xxxxx or mu-xxxxx which change on every reload
     const isDynamicMuiId = el.id && (
-      /^mui-\d+/i.test(el.id) || 
-      /^mui-/i.test(el.id) || 
-      /^mu-\d+/i.test(el.id) || 
+      /^mui-\d+/i.test(el.id) ||
+      /^mui-/i.test(el.id) ||
+      /^mu-\d+/i.test(el.id) ||
       /^mu-/i.test(el.id)
     );
 
@@ -918,7 +924,7 @@
     if (isDynamicMuiId) {
       console.log(`Ignoring dynamic Material-UI element ID: "#${el.id}" to ensure stable selector path.`);
     }
-    
+
     // Ensure attribute selectors are actually unique on the page before using them
     if (el.getAttribute('aria-label')) {
       const sel = `${el.tagName.toLowerCase()}[aria-label="${el.getAttribute('aria-label')}"]`;
@@ -938,7 +944,7 @@
         return sel;
       }
     }
-    
+
     const path = [];
     let current = el;
     while (current && current.nodeType === Node.ELEMENT_NODE) {
@@ -961,14 +967,14 @@
           selector += '.' + classes.join('.');
         }
       }
-      
+
       if (current.parentNode) {
         const siblings = Array.from(current.parentNode.children);
-        
+
         // Count how many siblings have the same tag and base classes
         const matchingSiblings = siblings.filter(s => {
           if (s.tagName !== current.tagName) return false;
-          
+
           const sClassAttr = s.getAttribute('class') || '';
           let sClasses = sClassAttr.trim().split(/\s+/).filter(Boolean);
           sClasses = sClasses.filter(c => {
@@ -978,10 +984,10 @@
             if (/focused|active|hover|disabled|error|required|mapping-/i.test(c)) return false;
             return true;
           });
-          
+
           return JSON.stringify(sClasses.sort()) === JSON.stringify(classes.sort());
         });
-        
+
         if (matchingSiblings.length > 1) {
           let index = 1;
           for (let i = 0; i < siblings.length; i++) {
@@ -995,13 +1001,13 @@
         }
       }
       path.unshift(selector);
-      
+
       // Perform defensive uniqueness checks at every DOM tree height level
       const currentPath = path.join(' > ');
       if (document.querySelectorAll(currentPath).length === 1) {
         return currentPath;
       }
-      
+
       current = current.parentNode;
       if (!current || current.tagName === 'BODY' || current.tagName === 'HTML') break;
     }
@@ -1042,7 +1048,7 @@
   function onTargetHover(e) {
     const el = e.target;
     if (container.contains(el)) return;
-    
+
     if (['INPUT', 'TEXTAREA'].includes(el.tagName) || el.getAttribute('contenteditable') === 'true') {
       el.classList.add('mapping-hover');
     }
@@ -1060,13 +1066,13 @@
     e.stopPropagation();
 
     el.classList.remove('mapping-hover');
-    
+
     const selector = getUniqueSelector(el);
     const fieldId = activeMappingFieldId;
-    
+
     // Update local variable directly
     elementSelectors[fieldId] = selector;
-    
+
     // Fetch latest storage state to prevent overwriting keys that might have been changed in other tabs
     const currentStorage = await chrome.storage.local.get('elementSelectors');
     const mergedSelectors = {
@@ -1074,22 +1080,22 @@
       ...(currentStorage.elementSelectors || {}),
       [fieldId]: selector
     };
-    
+
     // Self-heal/migration: Only keep keys currently defined in our default elementSelectors
     const cleanedSelectors = {};
     const defaultKeys = ['title_zh', 'title_en', 'praise_hymns', 'sermon_hymns'];
     defaultKeys.forEach(key => {
       cleanedSelectors[key] = mergedSelectors[key] || "";
     });
-    
+
     elementSelectors = cleanedSelectors;
-    
+
     // Write the complete clean selectors object back to storage atomically
     await chrome.storage.local.set({ elementSelectors });
 
     updateMappingBadges();
     stopInteractiveMapping();
-    
+
     sidebar.classList.remove('collapsed');
     showToast(`Successfully mapped "${fieldId}" to selector: ${selector}`);
   }
@@ -1120,7 +1126,7 @@
       // Robustly strip out all spaces, tabs, zero-width characters, and non-breaking spaces (e.g. for "開 會 詩")
       const txt = (label.textContent || '').replace(/[\s\xa0\u200b]+/g, '').trim().toLowerCase();
       if (!txt) continue;
-      
+
       let match = false;
       if (fieldKey === 'title_zh') {
         match = (txt.includes('講題') && (txt.includes('中') || txt.includes('zh') || txt.includes('chinese'))) || (txt === '講題');
@@ -1135,17 +1141,17 @@
       if (match) {
         // We found a label element! Let's find its associated input.
         console.log(`Found matching label element: "${label.textContent.trim()}" for field: "${fieldKey}"`);
-        
+
         // Scenario A: Label has 'htmlFor' pointing to an input
         if (label.htmlFor) {
           const input = document.getElementById(label.htmlFor);
           if (input) return input;
         }
-        
+
         // Scenario B: Input is nested inside the label
         const nestedInput = label.querySelector('input, textarea, [contenteditable="true"]');
         if (nestedInput) return nestedInput;
-        
+
         // Scenario C: Input is inside the same form control or parent container safely
         const parentControl = label.closest('.MuiFormControl-root, .form-group, .MuiInputBase-root') || label.parentElement;
         if (parentControl) {
@@ -1438,7 +1444,7 @@
       // 5. Short sleep delay to allow React/Vue/Angular page cycle to process the keypress and commit it to list
       await new Promise(r => setTimeout(r, 250));
     }
-    
+
     // Clear final remaining text inside input in case the site doesn't clear it automatically
     inputEl.focus();
     if (inputEl.tagName === 'INPUT' || inputEl.tagName === 'TEXTAREA') {
@@ -1456,7 +1462,7 @@
     }
     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-    
+
     return true;
   }
 
@@ -1508,12 +1514,83 @@
     if (filledCount > 0) {
       showToast(`Auto-filled ${filledCount} field(s) successfully!`);
     }
-    
+
     if (failedFields.length > 0) {
       showToast(`Warning: Failed to update ${failedFields.join(', ')}. Please map them by clicking the ⌖ icon next to each field in the sidebar!`, "error");
     }
+
+    // Automatically push to H2R Graphics
+    await pushToH2RGraphics();
   });
 
+
+
+  // Reset mappings button
+  safeAddListener('#tjc-reset-selectors-btn', 'click', async () => {
+    if (confirm("Are you sure you want to clear all your mapped field selectors?")) {
+      Object.keys(elementSelectors).forEach(key => elementSelectors[key] = "");
+      await chrome.storage.local.set({ elementSelectors });
+      updateMappingBadges();
+      showToast("CSS selectors mappings cleared.", "info");
+    }
+  });
+
+  // Wire debug panel refresh button
+  safeAddListener('#tjc-refresh-debug-btn', 'click', async (e) => {
+    e.stopPropagation();
+    const stored = await chrome.storage.local.get('elementSelectors');
+    const debugInfo = shadowRoot.querySelector('#tjc-debug-selectors-info');
+    if (debugInfo) {
+      const selectors = stored.elementSelectors || {};
+      debugInfo.innerHTML = Object.keys(elementSelectors)
+        .map(key => {
+          const val = selectors[key];
+          const color = val ? '#10b981' : 'var(--text-muted)';
+          const text = val ? val : '[Not Mapped in Storage]';
+          return `<span style="color:${color}"><strong>${key}</strong></span>: <span style="word-break:break-all">${text}</span>`;
+        })
+        .join('<br>') + `<br><br><span style="color:var(--text-muted); font-size:10px;">Loaded directly from chrome.storage.local at ${new Date().toLocaleTimeString()}</span>`;
+    }
+    showToast("Refreshed storage debugger!");
+  });
+
+
+
+  // ---------------------------------------------------------
+  // Verse Sync Settings Realtime Saving
+  // ---------------------------------------------------------
+  const settingsInputs = [
+    { el: shadowRoot.querySelector('#h2r-payload-template'), key: 'h2rTemplate' },
+    { el: shadowRoot.querySelector('#tjc-verse-ip-input'), key: 'h2rVerseIp' },
+    { el: shadowRoot.querySelector('#tjc-verse-project-input'), key: 'h2rVerseProject' },
+    { el: shadowRoot.querySelector('#tjc-verse-graphic-input'), key: 'h2rVerseGraphicId' },
+    { el: shadowRoot.querySelector('#tjc-verse-template-input'), key: 'h2rVerseTemplate' }
+  ];
+
+  settingsInputs.forEach(item => {
+    if (item.el) {
+      item.el.addEventListener('input', async () => {
+        settings[item.key] = item.el.value;
+        const currentStored = await chrome.storage.local.get("settings");
+        await chrome.storage.local.set({ settings: { ...(currentStored.settings || {}), ...settings } });
+      });
+    }
+  });
+
+  // Start the verse observer in the control window too, in case verses are displayed there
+  setupVerseObserver();
+
+  // Initial load
+  updateMappingBadges();
+
+  // Slide out sidebar on load automatically so they see it
+  setTimeout(() => {
+    sidebar.classList.remove('collapsed');
+  }, 600);
+
+  // ---------------------------------------------------------
+  // Verse Sync Observer Logic
+  // ---------------------------------------------------------
   // H2R Graphics Preview and Update Mechanics
   function updateH2RPreview() {
     const titleTemplate = parsedFields.title_zh ? `${parsedFields.title_zh} | ${parsedFields.title_en}` : "Sermon Title | 講題";
@@ -1529,8 +1606,7 @@
     if (previewS) previewS.textContent = subtitleTemplate;
   }
 
-  // Push sermon graphics to H2R Graphics server local endpoint
-  safeAddListener('#tjc-push-h2r-btn', 'click', async () => {
+  async function pushToH2RGraphics() {
     let endpoint = shadowRoot.querySelector('#h2r-pasted-url').value.trim();
     const host = shadowRoot.querySelector('#h2r-host').value.trim();
     const proj = shadowRoot.querySelector('#h2r-project').value.trim();
@@ -1581,11 +1657,13 @@
 
     function replacePlaceholders(obj) {
       if (typeof obj === 'string') {
+        const speakerCombined = `${parsedFields.speaker_zh || ''} ${parsedFields.speaker_en || ''}`.trim();
         return obj
           .replace(/{title_zh}/g, parsedFields.title_zh || '')
           .replace(/{title_en}/g, parsedFields.title_en || '')
           .replace(/{speaker_zh}/g, parsedFields.speaker_zh || '')
           .replace(/{speaker_en}/g, parsedFields.speaker_en || '')
+          .replace(/{speaker}/g, speakerCombined)
           .replace(/{sermon_hymns}/g, `${parsedFields.sermon_hymn_start}, ${parsedFields.sermon_hymn_end}`.trim().replace(/^,|,$/g, ''));
       } else if (Array.isArray(obj)) {
         return obj.map(replacePlaceholders);
@@ -1601,7 +1679,17 @@
 
     const payloadObj = replacePlaceholders(templateObj);
 
-    showToast("Sending update to H2R Graphics...", "info");
+    console.log("TJC Automator: Pushing to H2R Graphics", {
+      url: endpoint,
+      payload: payloadObj,
+      parsedFields: parsedFields
+    });
+
+    if (!parsedFields.title_zh && !parsedFields.speaker_zh) {
+      showToast("Warning: No service selected! Pushing empty text.", "error");
+    } else {
+      showToast("Sending update to H2R Graphics...", "info");
+    }
 
     try {
       const response = await new Promise((resolve) => {
@@ -1636,53 +1724,11 @@
       console.error(err);
       showToast(`H2R Error: ${err.message}. Ensure H2R Graphics is running on ${host}.`, "error");
     }
-  });
+  }
 
-  // Save Settings panel handler
-  safeAddListener('#tjc-save-settings-btn', 'click', async () => {
-    const templateText = shadowRoot.querySelector('#h2r-payload-template').value;
-    try {
-      JSON.parse(templateText);
-    } catch (e) {
-      showToast("Settings error: Invalid JSON in payload template", "error");
-      return;
-    }
-
-    settings.h2rTemplate = templateText;
-    // Fetch latest settings and merge
-    const currentSettings = await chrome.storage.local.get('settings');
-    const mergedSettings = { ...(currentSettings.settings || {}), ...settings };
-    await chrome.storage.local.set({ settings: mergedSettings });
-    showToast("Successfully saved settings!");
-  });
-
-  // Reset mappings button
-  safeAddListener('#tjc-reset-selectors-btn', 'click', async () => {
-    if (confirm("Are you sure you want to clear all your mapped field selectors?")) {
-      Object.keys(elementSelectors).forEach(key => elementSelectors[key] = "");
-      await chrome.storage.local.set({ elementSelectors });
-      updateMappingBadges();
-      showToast("CSS selectors mappings cleared.", "info");
-    }
-  });
-
-  // Wire debug panel refresh button
-  safeAddListener('#tjc-refresh-debug-btn', 'click', async (e) => {
-    e.stopPropagation();
-    const stored = await chrome.storage.local.get('elementSelectors');
-    const debugInfo = shadowRoot.querySelector('#tjc-debug-selectors-info');
-    if (debugInfo) {
-      const selectors = stored.elementSelectors || {};
-      debugInfo.innerHTML = Object.keys(elementSelectors)
-        .map(key => {
-          const val = selectors[key];
-          const color = val ? '#10b981' : 'var(--text-muted)';
-          const text = val ? val : '[Not Mapped in Storage]';
-          return `<span style="color:${color}"><strong>${key}</strong></span>: <span style="word-break:break-all">${text}</span>`;
-        })
-        .join('<br>') + `<br><br><span style="color:var(--text-muted); font-size:10px;">Loaded directly from chrome.storage.local at ${new Date().toLocaleTimeString()}</span>`;
-    }
-    showToast("Refreshed storage debugger!");
+  // Push sermon graphics to H2R Graphics server local endpoint
+  safeAddListener('#tjc-push-h2r-btn', 'click', async () => {
+    await pushToH2RGraphics();
   });
 
   // H2R Copy-Paste URL parsing listener
@@ -1716,12 +1762,141 @@
     });
   }
 
-  // Initial load
-  updateMappingBadges();
-  
-  // Slide out sidebar on load automatically so they see it
-  setTimeout(() => {
-    sidebar.classList.remove('collapsed');
-  }, 600);
+
+  function setupVerseObserver() {
+    let lastVerseText = "";
+
+    const observer = new MutationObserver(() => {
+      const text = document.body.innerText.trim();
+      if (text === lastVerseText || !text) return;
+
+      console.log("TJC Automator: RAW OBSERVER TEXT START ==\\n", text, "\\n== RAW OBSERVER TEXT END");
+
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      console.log("TJC Automator: Number of lines found:", lines.length);
+
+      // We look for a line containing a Bible reference (e.g., 1:1)
+      const refIndex = lines.findIndex(l => /[0-9]+:[0-9]+/.test(l));
+      console.log("TJC Automator: Reference index found at:", refIndex);
+
+      if (refIndex !== -1 && lines.length >= refIndex + 3) {
+        const currentVerse = lines.slice(refIndex, refIndex + 3).join('\n');
+
+        if (currentVerse !== lastVerseText) {
+          lastVerseText = currentVerse;
+          let reference = lines[refIndex];
+          let english = lines[refIndex + 1];
+          let chinese = lines[refIndex + 2];
+
+          // Chunking helper to insert line breaks
+          const chunkText = (text, maxLength, isEnglish) => {
+            if (!text) return "";
+            let result = [];
+            let current = text.trim();
+            while (current.length > maxLength) {
+              let splitIndex = maxLength;
+              if (isEnglish) {
+                // Find last space before the max length to avoid cutting words
+                const lastSpace = current.lastIndexOf(' ', maxLength);
+                if (lastSpace > 0) splitIndex = lastSpace;
+              }
+              result.push(current.slice(0, splitIndex).trim());
+              current = current.slice(splitIndex).trim();
+            }
+            if (current.length > 0) result.push(current);
+            // We use literal \n so the replacePlaceholders correctly replaces it
+            return result.join('\\n');
+          };
+
+          chinese = chunkText(chinese, 36, false);
+          english = chunkText(english, 80, true);
+
+          console.log("TJC Automator: Detected Verse!", { reference, chinese, english });
+          pushVerseToH2R(reference, chinese, english);
+        }
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    console.log("TJC Automator: Verse Observer is running.");
+  }
+
+  async function pushVerseToH2R(ref, zh, en) {
+    let currentSettings = {
+      h2rVerseIp: "http://10.10.1.67:4001",
+      h2rVerseProject: "ABCD",
+      h2rVerseGraphicId: "",
+      h2rVerseTemplate: '{\n  "body": "{reference}\\n{chinese}\\n{english}"\n}'
+    };
+
+    try {
+      const storedData = await chrome.storage.local.get('settings');
+      if (storedData.settings) {
+        currentSettings = { ...currentSettings, ...storedData.settings };
+      }
+    } catch (err) {
+      console.warn("TJC Automator: Could not load settings from storage", err);
+    }
+
+    if (!currentSettings.h2rVerseGraphicId) {
+      console.log("TJC Automator: Skipping H2R push because Verse Graphic ID is not configured.");
+      return;
+    }
+
+    const ip = currentSettings.h2rVerseIp || "http://10.10.1.67:4001";
+    const proj = currentSettings.h2rVerseProject || "ABCD";
+    const gid = currentSettings.h2rVerseGraphicId;
+
+    let templateObj;
+    try {
+      templateObj = JSON.parse(currentSettings.h2rVerseTemplate || '{"body":"{reference}\\n{chinese}\\n{english}"}');
+    } catch (e) {
+      console.error("TJC Automator: Invalid Verse Template JSON");
+      return;
+    }
+
+    function replacePlaceholders(obj) {
+      if (typeof obj === 'string') {
+        return obj
+          .replace(/{reference}/g, ref)
+          .replace(/{chinese}/g, zh)
+          .replace(/{english}/g, en);
+      } else if (Array.isArray(obj)) {
+        return obj.map(replacePlaceholders);
+      } else if (obj !== null && typeof obj === 'object') {
+        const res = {};
+        for (const k in obj) {
+          res[k] = replacePlaceholders(obj[k]);
+        }
+        return res;
+      }
+      return obj;
+    }
+
+    const payload = replacePlaceholders(templateObj);
+    if (!Array.isArray(payload.cues)) payload.cues = [];
+
+    const updateUrl = `${ip.replace(/\/$/, '')}/api/${proj}/graphic/${gid}/update`;
+    const showUrl = `${ip.replace(/\/$/, '')}/api/${proj}/graphic/${gid}/show`;
+
+    try {
+      chrome.runtime.sendMessage({
+        action: 'PUSH_H2R',
+        updateUrl: updateUrl,
+        showUrl: showUrl,
+        payload: payload
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error("TJC Automator: Error communicating with background script:", chrome.runtime.lastError);
+        } else if (response && response.success) {
+          console.log("TJC Automator: Pushed verse to H2R successfully via background script!", ref);
+        } else {
+          console.error("TJC Automator: Background script failed to push verse to H2R", response?.error);
+        }
+      });
+    } catch (e) {
+      console.error("TJC Automator: Failed to push verse to H2R Graphics", e);
+    }
+  }
 
 })();

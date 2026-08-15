@@ -1,5 +1,5 @@
 /* TJCGG Service Flow Automator Stylesheet */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
+
 
 :host {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -398,57 +398,7 @@ textarea {
   justify-content: space-between;
 }
 
-/* Lower Third Preview Bubble */
-.lower-third-preview {
-  margin-top: 8px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px dashed var(--border-color);
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
 
-.preview-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.preview-graphic {
-  background: linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(20,20,20,0.95) 40%, rgba(5,5,5,0.7) 100%);
-  border-left: 5px solid var(--primary);
-  padding: 12px 18px;
-  border-radius: 4px;
-  min-height: 50px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-}
-
-.preview-title {
-  color: #ffffff;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0 0 2px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.preview-subtitle {
-  color: #e2e8f0;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 /* Toast alert notification */
 .toast-container {

@@ -52,7 +52,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'PUSH_H2R') {
     (async () => {
       try {
-        const response = await fetch(message.url, {
+        const targetUrl = message.url || message.updateUrl;
+        const response = await fetch(targetUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
