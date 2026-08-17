@@ -50,8 +50,8 @@
 
   // Default App Settings
   let settings = {
-    sheetUrl: "https://docs.google.com/spreadsheets/d/1zrMaPubQ7uaUvgBjYZ3lWIBRUclg0GsGliHMqpvOark/edit?gid=1244479830#gid=1244479830",
-    h2rVerseIp: "http://10.10.1.67:4001",
+    sheetUrl: "",
+    h2rVerseIp: "",
     h2rVerseProject: "ABCD",
     h2rVerseGraphicId: "",
     h2rVerseTemplate: '{\n  "body": "{reference}\\n{chinese}\\n{english}"\n}',

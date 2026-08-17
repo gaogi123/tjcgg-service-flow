@@ -4,43 +4,25 @@ Automates service preparation on [service.tjc.org](https://service.tjc.org) and 
 
 ## Overview
 
-This repository contains tools and Chrome extensions designed to streamline the weekly service workflow for True Jesus Church:
+This repository contains a unified Chrome Extension designed to streamline the weekly service workflow for True Jesus Church.
 
-1. **`tjc-automator/`**: Chrome Extension for `service.tjc.org`
-   - Sequential autofilling of sermon details, speakers, and hymns from Google Sheets.
-   - Interactive floating action panel with step-by-step guidance.
-   - Live synchronization and validation against the service schedule.
-
-2. **`h2r-controller/`**: H2R Graphics Lower Thirds Controller
-   - Chrome Extension popup for controlling H2R Graphics lower thirds.
-   - CSV data parsing for speakers and service schedule.
-   - Quick search and instant graphic population.
+The extension integrates the previously standalone `tjc-automator` and `h2r-controller` into a single, seamless tool:
+- **Service.tjc.org Autofill**: Sequential autofilling of sermon details, speakers, and hymns directly from Google Sheets via an interactive floating sidebar.
+- **H2R Graphics Integration**: A one-click workflow that takes the autofilled sermon data and pushes it to an H2R Graphics lower third on your local network.
+- **Live Background Verse Sync**: A background observer that listens for Bible verses pushed to `service.tjc.org` and seamlessly relays them to an H2R Graphics instance.
 
 ## Installation & Setup
 
-### Loading Extensions in Chrome
+### Loading the Extension in Chrome
 1. Open Google Chrome and navigate to `chrome://extensions/`.
 2. Enable **Developer mode** using the toggle switch in the top-right corner.
-3. Click **Load unpacked** and select either the `tjc-automator` or `h2r-controller` directory.
+3. Click **Load unpacked** and select the root directory of this repository (`tjcgg-service-flow`).
 
-## Project Structure
+## Usage
+1. Pin the extension and ensure it is active when navigating to `service.tjc.org`.
+2. Open the floating sidebar (the blue wand icon) on `service.tjc.org`.
+3. In the **Schedule** tab, paste your Google Sheet URL and click **Load Schedule Data**.
+4. Select the service you wish to prepare.
+5. Click **Auto-Fill & Push to H2R** to automatically fill the web form and push the corresponding graphic payload to your H2R Graphics server.
 
-```
-├── tjc-automator/        # TJC Service Flow Chrome Extension (packaged)
-│   ├── manifest.json
-│   ├── content.js
-│   ├── service-worker.js
-│   ├── styles.css
-│   └── test-harness.html
-├── h2r-controller/       # H2R Graphics controller popup
-│   ├── manifest.json
-│   ├── popup.html
-│   ├── popup.js
-│   ├── popup.css
-│   └── data.csv
-├── content.js            # Root content script
-├── manifest.json         # Root extension manifest
-├── service-worker.js     # Root service worker
-├── styles.css            # Root styles
-└── test-harness.html     # Testing & mockup environment
-```
+*Note: You can configure the IP address, Port, and specific JSON Payload mappings for H2R Graphics under the **Settings** tab.*
